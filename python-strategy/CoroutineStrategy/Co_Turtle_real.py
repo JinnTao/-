@@ -155,8 +155,16 @@ class Turtle:
             self.n = ATR(self.klines, self.atr_day_length)["atr"].iloc[-1]
             # 买卖单位
             #: 账户权益 （账户权益 = 动态权益 = 静态权益 + 平仓盈亏 + 持仓盈亏 - 手续费 + 权利金 + 期权市值）
-            margin_ratio = 10
-            self.unit = int((self.account.available * 0.60) / (self.quote.volume_multiple * self.n * margin_ratio))
+
+            self.unit = int((self.account.available * 0.06) / (self.quote.volume_multiple * self.n))
+            margin_ratio = 0.1
+            while self.unit > 0:
+                if self.unit * margin_ratio * self.quote.last_price * self.quote.volume_multiple < self.account.available:
+                    break;
+                else:
+                    # 调整unit的之
+                    self.unit -= 1
+
             # 唐奇安通道上轨：前N个交易日的最高价
             self.donchian_channel_high = max(self.klines.high[-self.donchian_channel_open_position - 1:-1])
             # 唐奇安通道下轨：前N个交易日的最低价
@@ -212,30 +220,30 @@ class Turtle:
                     # 就再加一个Unit的多仓,并且风险度在设定范围内(以防爆仓)
                     if self.quote.last_price >= \
                             self.state["last_price"] + 0.5 * self.n and self.account.risk_ratio <= self.max_risk_ratio:
-                        print("加仓:加1个Unit的多仓")
+                        print(self.quote.datetime,self.underlying_symbol,"加仓:加1个Unit的多仓"," unit: ",self.unit)
                         self.set_position(self.state["position"] + self.unit)
                     # 止损策略: 如果是多仓且行情最新价在上一次建仓（或者加仓）的基础上又下跌了2N，就卖出全部头寸止损
                     elif self.quote.last_price <= self.state["last_price"] - 2 * self.n:
-                        print("止损:卖出全部头寸")
+                        print(self.quote.datetime,self.underlying_symbol,"止损:卖出全部头寸")
                         self.set_position(0)
                     # 止盈策略: 如果是多仓且行情最新价跌破了10日唐奇安通道的下轨，就清空所有头寸结束策略,离场
                     if self.quote.last_price <= min(self.klines.low[-self.donchian_channel_stop_profit - 1:-1]):
-                        print("止盈:清空所有头寸结束策略,离场")
+                        print(self.quote.datetime,self.underlying_symbol,"止盈:清空所有头寸结束策略,离场")
                         self.set_position(0)
 
                 elif self.state["position"] < 0:  # 持空单
                     # 加仓策略: 如果是空仓且行情最新价在上一次建仓（或者加仓）的基础上又下跌了0.5N，就再加一个Unit的空仓,并且风险度在设定范围内(以防爆仓)
                     if self.quote.last_price <= \
                             self.state["last_price"] - 0.5 * self.n and self.account.risk_ratio <= self.max_risk_ratio:
-                        print("加仓:加1个Unit的空仓")
+                        print(self.quote.datetime,self.underlying_symbol,"加仓:加1个Unit的空仓"," unit: ",self.unit)
                         self.set_position(self.state["position"] - self.unit)
                     # 止损策略: 如果是空仓且行情最新价在上一次建仓（或者加仓）的基础上又上涨了2N，就平仓止损
                     elif self.quote.last_price >= self.state["last_price"] + 2 * self.n:
-                        print("止损:卖出全部头寸")
+                        print(self.quote.datetime,self.underlying_symbol,"止损:卖出全部头寸")
                         self.set_position(0)
                     # 止盈策略: 如果是空仓且行情最新价升破了10日唐奇安通道的上轨，就清空所有头寸结束策略,离场
                     if self.quote.last_price >= max(self.klines.high[-self.donchian_channel_stop_profit - 1:-1]):
-                        print("止盈:清空所有头寸结束策略,离场")
+                        print(self.quote.datetime,self.underlying_symbol,"止盈:清空所有头寸结束策略,离场")
                         self.set_position(0)
 
     async def strategy(self):
@@ -265,7 +273,7 @@ class Turtle:
             now_time = datetime.datetime.strptime(quote.datetime, "%Y-%m-%d %H:%M:%S.%f")  # 获取当前的行情时间
             if now_time.hour == close_hour and now_time.minute >= close_minute:  # 到达平仓时间: 平仓
                 print("临近本交易日收盘: 保存状态")
-                json.dump(self.state, open(self.json_file, "w"))  #
+                # json.dump(self.state, open(self.json_file, "w"))  #
                 # deadline = time.time() + 60  # 设置截止时间为当前时间的60秒以后
                 # while self.api.wait_update(deadline=deadline):  # 等待60秒
                 #     pass
