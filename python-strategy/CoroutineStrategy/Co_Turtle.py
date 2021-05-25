@@ -15,11 +15,9 @@ import traceback
 from contextlib import closing
 from threading import Timer
 
-from Common import mysqlConfig,Tao, CapitalManager, orderManager
-from tqsdk import TqApi, TqAuth, TargetPosTask, TqKq, TqAccount,tafunc,TqChan
+from Common import mysqlConfig, Tao, CapitalManager, orderManager
+from tqsdk import TqApi, TqAuth, TargetPosTask, TqKq, TqAccount, tafunc, TqChan
 from tqsdk.ta import ATR
-
-
 
 import random
 from asyncio import gather
@@ -86,7 +84,6 @@ class Turtle:
         self.save_trades()
         self.init_by_load_trades()
 
-
     def save_trades(self):
         # 初始化mysql 链接
         mysql = mysqlConfig.MysqlDataConn(Tao.MYSQL_HOST, Tao.MYSQL_USER, Tao.MYSQL_PSWD, Tao.MYSQL_DB, 3306)
@@ -113,19 +110,6 @@ class Turtle:
             logger.info("error")
         finally:
             mysql.close()
-
-    def init(self, json_file, data):
-        try:
-            f = open(json_file, 'r')
-            f.close()
-        except IOError:
-            f = open(json_file, 'w+')
-            json.dump(data, f)
-            f.close()
-        finally:
-            # 如果持仓为0 用账户数据跟新
-            self.state = json.load(open(json_file, "r"))
-            self.json_file = json_file
 
     def init_by_load_trades(self):
         mysql = None
@@ -159,7 +143,7 @@ class Turtle:
             # 买卖单位
             #: 账户权益 （账户权益 = 动态权益 = 静态权益 + 平仓盈亏 + 持仓盈亏 - 手续费 + 权利金 + 期权市值）
 
-            self.unit = max(int((self.account.available * 0.06) / (self._quote.volume_multiple * self.n)),0)
+            self.unit = max(int((self.account.available * 0.06) / (self._quote.volume_multiple * self.n)), 0)
             margin_ratio = 0.1
             while self.unit > 0:
                 if self.unit * margin_ratio * self._quote.last_price * self._quote.volume_multiple < self.account.available:
@@ -174,9 +158,9 @@ class Turtle:
             self.donchian_channel_low = min(self.klines.low[-self.donchian_channel_open_position - 1:-1])
             # logger.info("账户可用资金 %f " % self.account.available)
             logger.info("Pos:%4s,Last_price:%9.2f,Inst:%12s 上下轨:%8s, %8s N值: %6.2f Unit:%4s 可用:%10.2f,QuoteTime:%s" %
-                  ( self.state['position'],self.state['last_price'],self._symbol,
-                    self.donchian_channel_high, self.donchian_channel_low, self.n,
-                   self.unit, self.account.available,self._quote.datetime))
+                        (self.state['position'], self.state['last_price'], self._symbol,
+                         self.donchian_channel_high, self.donchian_channel_low, self.n,
+                         self.unit, self.account.available, self._quote.datetime))
             return True
         except Exception as e:
             logger.info(e)
@@ -188,9 +172,9 @@ class Turtle:
         is_finish = True
         for order in order_flow:
             logger.info("订单Id:", order.order_id, order.instrument_id, order.direction, order.offset,
-                  " vol_ori:", order.volume_orign, " vol_left:", order.volume_left,
-                  " is_dead:", order.is_dead, " is_error: ", order.is_error, " is_online:",
-                  order.is_online, "last_msg:", order.last_msg)
+                        " vol_ori:", order.volume_orign, " vol_left:", order.volume_left,
+                        " is_dead:", order.is_dead, " is_error: ", order.is_error, " is_online:",
+                        order.is_online, "last_msg:", order.last_msg)
             if not order.is_dead:
                 is_finish = False
             # 挂单超时 撤单
@@ -199,7 +183,7 @@ class Turtle:
                                                  datetime.timedelta(seconds=self._order_vilid_time))
             trade_price.append(order.trade_price)
         # 可能部分成交
-        if not pd.isna(pd.Series(trade_price,dtype='float64').mean()):
+        if not pd.isna(pd.Series(trade_price, dtype='float64').mean()):
             self.state["last_price"] = self._quote["last_price"]
             self.state["position"] = self._pos.pos
         return is_finish
@@ -207,7 +191,7 @@ class Turtle:
     def set_position(self, pos):
         self._order_factory.set_target_position(self._symbol, pos, "PASSIVE")
 
-    async def try_open(self, updateChan):
+    async def try_open(self, updateChan: TqChan):
         """开仓策略"""
         async for _ in updateChan:
             if self.state["position"] != 0:
@@ -230,7 +214,7 @@ class Turtle:
                     logger.info("合约: %s 当前价<唐奇安通道下轨，卖出1个Unit(持空仓): %d 手" % (self._symbol, self.unit))
                     self.set_position(self.state["position"] - self.unit)
 
-    async def try_close(self, updateChan):
+    async def try_close(self, updateChan: TqChan):
         """交易策略"""
         async for _ in updateChan:
             if self.state['position'] == 0:
@@ -291,58 +275,17 @@ class Turtle:
                 await self.try_open(update_chan)
                 await self.try_close(update_chan)
 
-    def try_save_state(self, quote, close_hour, close_minute) -> bool:
-        # 每个交易日 临近
-        if api.is_changing(quote, "datetime"):
-            now_time = datetime.datetime.strptime(quote.datetime, "%Y-%m-%d %H:%M:%S.%f")  # 获取当前的行情时间
-            if now_time.hour == close_hour and now_time.minute >= close_minute:  # 到达平仓时间: 平仓
-                logger.info("临近本交易日收盘: 保存状态")
-                json.dump(self.state, open(self.json_file, "w"))  #
-                # deadline = time.time() + 60  # 设置截止时间为当前时间的60秒以后
-                # while self.api.wait_update(deadline=deadline):  # 等待60秒
-                #     pass
-                # self.api.close()  # 关闭api
-                # break  # 退出while循环
-                return True
-        return False
-
 
 async def coroutine_turtle(api: TqApi, symbol: str) -> None:
     global turtle_state_dir
     turtle = Turtle(symbol, api)
-    # json_file = turtle_state_dir + symbol + ".json"
-    # check json file
-    # turtle.init(json_file, data)
-    # turtle.init_by_load_trades()
-    # run turtle
-
     await turtle.strategy()
 
 
-def orgin():
-    # turtle = Turtle("SHFE.au2006")
-    # turtle = Turtle(Tao.MAIN_SHFE_AU,account=TqKq(),auth=TqAuth(Tao.ACC,Tao.PWD))
-    turtle = Turtle()
-    turtle_state_dir = "../userdata/turtle_state.json"
-    logger.info("策略开始运行")
-    try:
-        turtle.state = json.load(open(turtle_state_dir, "r"))  # 读取数据: 本策略目标净持仓数,上一次开仓价
-    except FileNotFoundError:
-        pass
-    logger.info("当前持仓数: %d, 上次调仓价: %f" % (turtle.state["position"], turtle.state["last_price"]))
-    try:
-        turtle.strategy()
-    finally:
-        turtle._api.close()
-        json.dump(turtle.state, open(turtle_state_dir, "w"))  #
-    return
-
-
 def init_turtle(api: TqApi, s: pd.Series):
-    # logger.info("trade:",s['quote_inst'],",pos:",s['pos'])
-    # coroutine_turtle(api, s['quote_inst'])
     api.create_task(coroutine_turtle(api, s['quote_inst']))
     return
+
 
 def risk_controller(api):
     try:
@@ -356,15 +299,14 @@ def risk_controller(api):
         logger.info(e)
 
 
-
-
 if __name__ == "__main__":
 
     logger.info("***************************  strategy start  *******************************")
     api = TqApi(account=TqKq(), auth=TqAuth(LG_ACC, LG_PWD))
-    api.set_risk_management_rule(exchange_id="SSE", enable=True)
-    # 等待发送数据
-    api.wait_update()
+    # api.set_risk_management_rule(exchange_id="SSE", enable=True)
+    # # 等待发送数据
+    # api.wait_update()
+    # tr = Timer(10,risk_controller,(api,))
     # 资金管理
     cm = CapitalManager.CapitalManager(api, 10000, 0.80)
 
@@ -375,9 +317,6 @@ if __name__ == "__main__":
                                  ])
     pos_pd = cm.calc_pos_list_by_turle(quoteList, 20)
     pos_pd.apply(lambda x: init_turtle(api, x), axis=1)
-
-    tr = Timer(10,risk_controller,(api,))
-
 
     with closing(api):
         while True:

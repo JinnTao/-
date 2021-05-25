@@ -26,7 +26,7 @@
 
 #### 2021-05-24 21:37:18
 
-````
+```
 回访
 ws://139.196.53.95:27961/t/rmd/front/mobile
 回测
@@ -37,6 +37,22 @@ downLoader:
 2021-03-28 12:56:47 -     INFO - 通知: 与 wss://otg-sim.shinnytech.com/trade 的网络连接已建立
 2021-03-28 12:56:47 -     INFO - 通知: 与 wss://free-api.shinnytech.com/t/nfmd/front/mobile 的网络连接已建立
 ```
+
+####  2021-05-25 23:07:45 
+
+1. 日志：用logging做好了，实盘和模拟盘分别存在不同目录下
+    - bug:TimedRotatingFileHandler logging这个handle不生效 就比较晕
+    - 用test.yml是可以成功的 难道按日切割应该用when:H？
     
+2. 风控：受阻:测试账户没法设置风控规则
+    - 用Timer每隔60s输出一边规则？
+    - 用风控RC控制交易策略，如果发现出问题，则停止交易kill thread
+    - 也就是用另一个风控脚本控制
+    
+---
+** TODO: 深度学习之股指期货日内交易策略 复现 **
+>> 纵使再努力，也应坦然接受不好的结果。
+
+
     
 
