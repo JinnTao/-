@@ -1,0 +1,53 @@
+version: 1
+disable_existing_loggers: False
+formatters:
+        simple:
+            format: "%(asctime)s -     %(levelname)s - %(message)s"
+            datefmt: '%F %T'
+        simple_V:
+            format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            datefmt: '%F %T'
+
+handlers:
+    console:
+            class: logging.StreamHandler
+            level: INFO
+            formatter: simple
+            stream: ext://sys.stdout
+    info_file_handler:
+            class: logging.handlers.TimedRotatingFileHandler
+            level: INFO
+            formatter: simple
+            filename: ../userdata/RLog/info.log
+            backupCount: 30
+            interval: 1
+            when: midnight
+            encoding: utf8
+    debug_file_handler:
+            class: logging.handlers.TimedRotatingFileHandler
+            level: DEBUG
+            formatter: simple
+            filename: ../userdata/RLog/debug.log
+            backupCount: 30
+            interval: 1
+            when: midnight
+            encoding: utf8
+    error_file_handler:
+            class: logging.handlers.TimedRotatingFileHandler
+            level: ERROR
+            formatter: simple
+            filename: ../userdata/RLog/error.log
+            backupCount: 30
+            interval: 1
+            when: midnight
+            encoding: utf8
+
+loggers:
+    tq_moudle:
+            level: INFO
+            handlers: [info_file_handler]
+            propagate: False
+root:
+    level: INFO
+#    handlers: [console,info_file_handler,error_file_handler]
+    handlers: [console,info_file_handler]

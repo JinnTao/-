@@ -324,7 +324,10 @@ def init_turtle(api: TqApi, s: pd.Series):
 # 2 观察保存数据是否是持仓数据，如果是则直接用持仓数据进行 则省略了创建文件的难点
 
 if __name__ == "__main__":
-    api = TqApi(account=TqAccount("J建信期货",ACC,PWD),auth=TqAuth(LG_ACC,LG_PWD))
+    api = TqApi(account=TqAccount(Tao.BROKER_10008,ACC,PWD),auth=TqAuth(LG_ACC,LG_PWD))
+    # api.set_risk_management_rule(exchange_id="SSE", enable=True)
+    # # 等待发送数据
+    # api.wait_update()
     # 这里修改为动态的
     cm = CapitalManager.CapitalManager(api, 10000, 0.80)
 
