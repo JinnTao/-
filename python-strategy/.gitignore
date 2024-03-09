@@ -1,0 +1,11 @@
+# idea 文件
+.idea/
+# vscode 文件
+.vscode/
+# 
+Algorithm/
+Common/
+doc/
+# template/OldStrategyTemplate/
+tool/
+userdata/

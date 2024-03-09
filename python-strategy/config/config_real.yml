@@ -44,10 +44,10 @@ handlers:
 
 loggers:
     tq_moudle:
-            level: INFO
-            handlers: [info_file_handler]
+            level: DEBUG
+            handlers: [console,info_file_handler,debug_file_handler,error_file_handler]
             propagate: False
 root:
     level: INFO
 #    handlers: [console,info_file_handler,error_file_handler]
-    handlers: [console,info_file_handler]
+    handlers: [console,info_file_handler,debug_file_handler,error_file_handler] # debug handel 会由于TQSDK的冲突

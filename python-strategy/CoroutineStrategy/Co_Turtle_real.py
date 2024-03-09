@@ -33,6 +33,8 @@ LG_PWD = Tao.SIM_PWD # 登陆所用密码
 # 交易模式
 TRADE_MODE = Tao.TRADE_MODE.REAL
 # 配置loggging
+
+
 logger = Tao.setup_logging(default_path="../config/config_real.yml")
 
 
@@ -75,7 +77,7 @@ class Turtle:
         self._price = 0
         # 订单
         self._order_factory = orderManager.OrderFactory(self._api)
-        self._order_vilid_time = 300  # seconds
+        self._order_vilid_time = Tao.ORDER_LIVE_TIME  # 半个小时 seconds
 
         # 持仓引用
         self._pos = self._api.get_position(self._symbol)
@@ -142,7 +144,7 @@ class Turtle:
             self.n = ATR(self.klines, self.atr_day_length)["atr"].iloc[-1]
             # 买卖单位
             #: 账户权益 （账户权益 = 动态权益 = 静态权益 + 平仓盈亏 + 持仓盈亏 - 手续费 + 权利金 + 期权市值）
-
+            # 对于部分完全不活跃合约如bb2109 volume_multiple 可能为0
             self.unit = max(int((self.account.available * 0.06) / (self._quote.volume_multiple * self.n)), 0)
             margin_ratio = 0.1
             while self.unit > 0:
@@ -157,7 +159,8 @@ class Turtle:
             # 唐奇安通道下轨：前N个交易日的最低价
             self.donchian_channel_low = min(self.klines.low[-self.donchian_channel_open_position - 1:-1])
             # logger.info("账户可用资金 %f " % self.account.available)
-            logger.info("Pos:%4s,Last_price:%9.2f,Inst:%12s 上下轨:%8s, %8s N值: %6.2f Unit:%4s 可用:%10.2f,QuoteTime:%s" %
+            # 这里的LastPrice代表的是上次成交价，根据当前主力合约从数据库表中获取，如果历史成交了，但是换月了就不显示了
+            logger.info("Pos:%4s,last_tradeP:%9.2f,Inst:%12s 上下轨:%8s, %8s N值: %6.2f Unit:%4s 可用:%10.2f,QuoteTime:%s" %
                         (self.state['position'], self.state['last_price'], self._symbol,
                          self.donchian_channel_high, self.donchian_channel_low, self.n,
                          self.unit, self.account.available, self._quote.datetime))
@@ -171,10 +174,10 @@ class Turtle:
         trade_price = []
         is_finish = True
         for order in order_flow:
-            logger.info("订单Id:", order.order_id, order.instrument_id, order.direction, order.offset,
-                        " vol_ori:", order.volume_orign, " vol_left:", order.volume_left,
-                        " is_dead:", order.is_dead, " is_error: ", order.is_error, " is_online:",
-                        order.is_online, "last_msg:", order.last_msg)
+            logger.info("OrderId:{0} {1} {2} vol_ori:{3} vol_left:{4} is_dead:{5} is_error:{6} is_error:{7} is_online:{8} msg:{9}".format(
+                order.order_id,order.instrument_id,order.direction,order.offset,order.volume_orign,order.volume_left,
+                order.is_dead,order.is_error,order.is_online,order.last_msg
+            ))
             if not order.is_dead:
                 is_finish = False
             # 挂单超时 撤单
@@ -194,7 +197,8 @@ class Turtle:
     async def try_open(self, updateChan: TqChan):
         """开仓策略"""
         async for _ in updateChan:
-            if self.state["position"] != 0:
+            # if self.state["position"] != 0:
+            if self._pos.pos != 0:
                 break;
             # 除了新K线 还应包括持仓变动
             if self._api.is_changing(self.klines.iloc[-1], "datetime"):  # 如果产生新k线,则重新计算唐奇安通道及买卖单位
@@ -206,7 +210,13 @@ class Turtle:
                 # 清空订单状态
                 self._order_factory.clear_order()
 
-                # logger.info("最新价: %f" % self.quote.last_price)
+                # 可用资金不足
+                if self.account.available < 0:
+                    continue
+
+                logger.debug("Inst : %s lastP: %f high:%s low:%s unit:%s" % (self._symbol,self._quote.last_price,
+                                                                           self.donchian_channel_high,self.donchian_channel_low
+                                                                           ,self.unit))
                 if self._quote.last_price > self.donchian_channel_high and self.unit != 0:  # 当前价>唐奇安通道上轨，买入1个Unit；(持多仓)
                     logger.info("合约: %s 当前价>唐奇安通道上轨，买入1个Unit(持多仓): %d 手" % (self._symbol, self.unit))
                     self.set_position(self.state["position"] + self.unit)
@@ -217,7 +227,7 @@ class Turtle:
     async def try_close(self, updateChan: TqChan):
         """交易策略"""
         async for _ in updateChan:
-            if self.state['position'] == 0:
+            if self._pos.pos == 0:
                 break;
             if self._api.is_changing(self._quote, "last_price"):
                 # 存在未成交订单
@@ -229,32 +239,52 @@ class Turtle:
                 if self.state["position"] > 0:  # 持多单
                     # 加仓策略: 如果是多仓且行情最新价在上一次建仓（或者加仓）的基础上又上涨了0.5N，
                     # 就再加一个Unit的多仓,并且风险度在设定范围内(以防爆仓)
+                    logger.debug("Inst : %s lastP: %f high:%s low:%s unit:%s" % (self._symbol, self._quote.last_price,
+                                                                               self.donchian_channel_high,
+                                                                               self.donchian_channel_low
+                                                                               , self.unit))
+
                     if self._quote.last_price >= \
-                            self.state["last_price"] + 0.5 * self.n and self.account.risk_ratio <= self.max_risk_ratio:
-                        logger.info("加仓:加1个Unit的多仓")
+                            self.state["last_price"] + 0.5 * self.n and self.account.risk_ratio <= self.max_risk_ratio\
+                            and self.unit != 0:
+                        msg = "加仓:加1个Unit的多仓"
+                        logger.info("{0} {1} {2} {3} {4}".format(self._symbol,self._quote.last_price,self._pos.pos,
+                                                                         self.account.available,msg))
+                        logger.info(self._symbol," ",self._quote.last_price," ",self._pos.pos," ",self.account.available)
                         self.set_position(self.state["position"] + self.unit)
                     # 止损策略: 如果是多仓且行情最新价在上一次建仓（或者加仓）的基础上又下跌了2N，就卖出全部头寸止损
                     elif self._quote.last_price <= self.state["last_price"] - 2 * self.n:
-                        logger.info("止损:卖出全部头寸")
+                        msg = "止损:卖出全部头寸"
+                        logger.info("{0} {1} {2} {3} {4}".format(self._symbol,self._quote.last_price,self._pos.pos,
+                                                                         self.account.available,msg))
                         self.set_position(0)
                     # 止盈策略: 如果是多仓且行情最新价跌破了10日唐奇安通道的下轨，就清空所有头寸结束策略,离场
                     if self._quote.last_price <= min(self.klines.low[-self.donchian_channel_stop_profit - 1:-1]):
-                        logger.info("止盈:清空所有头寸结束策略,离场")
+                        msg = "止盈:清空所有头寸结束策略,离场"
+                        logger.info("{0} {1} {2} {3} {4}".format(self._symbol,self._quote.last_price,self._pos.pos,
+                                                                         self.account.available,msg))
                         self.set_position(0)
 
                 elif self.state["position"] < 0:  # 持空单
                     # 加仓策略: 如果是空仓且行情最新价在上一次建仓（或者加仓）的基础上又下跌了0.5N，就再加一个Unit的空仓,并且风险度在设定范围内(以防爆仓)
                     if self._quote.last_price <= \
-                            self.state["last_price"] - 0.5 * self.n and self.account.risk_ratio <= self.max_risk_ratio:
-                        logger.info("加仓:加1个Unit的空仓")
+                            self.state["last_price"] - 0.5 * self.n and self.account.risk_ratio <= self.max_risk_ratio\
+                            and self.unit != 0:
+                        msg = "加仓:加1个Unit的空仓"
+                        logger.info("{0} {1} {2} {3} {4}".format(self._symbol,self._quote.last_price,self._pos.pos,
+                                                                         self.account.available,msg))
                         self.set_position(self.state["position"] - self.unit)
                     # 止损策略: 如果是空仓且行情最新价在上一次建仓（或者加仓）的基础上又上涨了2N，就平仓止损
                     elif self._quote.last_price >= self.state["last_price"] + 2 * self.n:
-                        logger.info("止损:卖出全部头寸")
+                        msg = "止损:卖出全部头寸"
+                        logger.info("{0} {1} {2} {3} {4}".format(self._symbol,self._quote.last_price,self._pos.pos,
+                                                                         self.account.available,msg))
                         self.set_position(0)
                     # 止盈策略: 如果是空仓且行情最新价升破了10日唐奇安通道的上轨，就清空所有头寸结束策略,离场
                     if self._quote.last_price >= max(self.klines.high[-self.donchian_channel_stop_profit - 1:-1]):
-                        logger.info("止盈:清空所有头寸结束策略,离场")
+                        msg = "止盈:清空所有头寸结束策略,离场"
+                        logger.info("{0} {1} {2} {3} {4}".format(self._symbol,self._quote.last_price,self._pos.pos,
+                                                                         self.account.available,msg))
                         self.set_position(0)
 
     async def strategy(self):
@@ -267,10 +297,12 @@ class Turtle:
                 await update_chan.recv()
 
             deadline = time.time() + 5
+            # 有些不活跃合约 会发生计算错误，这个时候就进行下面的，直接return
             while not self.recalc_paramter():
-                if not self._api.wait_update(deadline=deadline):
-                    raise Exception("获取数据失败，请确认行情连接正常并已经登录交易账户")
+                logger.info("Inst %s excepttion"%(self._symbol))
+                return
 
+            logger.debug("%s strategy start"%self._symbol)
             while True:
                 await self.try_open(update_chan)
                 await self.try_close(update_chan)
@@ -315,9 +347,15 @@ if __name__ == "__main__":
                                     , Tao.EXCHANGE_DCE
                                     , Tao.EXCHANGE_CZCE
                                  ])
-    pos_pd = cm.calc_pos_list_by_turle(quoteList, 20)
+    im = Tao.InstManager(api)
+    invalid_pos = im.enable_trade_inst(quoteList)
+    if len(invalid_pos) > 0:
+        logger.info("Non main-inst:{0} in position".format(invalid_pos))
+
+    pos_pd = cm.calc_pos_list_by_turle(quoteList , 20)
     pos_pd.apply(lambda x: init_turtle(api, x), axis=1)
 
     with closing(api):
         while True:
             api.wait_update()
+            pass
