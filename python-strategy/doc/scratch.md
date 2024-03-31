@@ -106,7 +106,7 @@ with tf.Session() as sess:
     Tag:散度矩阵 = 类内离散度矩阵 = 类内离差阵 = 协方差矩阵 x (n-1)
 
 # 2024-03-09
-
+免费的行情源：Tushare AKshare baostock Ashare Pytdx
 
     
 

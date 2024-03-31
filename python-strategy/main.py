@@ -4,11 +4,11 @@
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 import tqsdk as tq;
 
-
+from Common import Tao
 
 def init(isGui = False):
-    api = tq.TqApi(web_gui= isGui,auth=tq.TqAuth("15889961554","@a123456"))
-    return api;
+    api = tq.TqApi(web_gui= isGui,auth=tq.TqAuth(Tao.ACC,Tao.PWD))
+    return api
 def show_account(account):
     return
 
@@ -21,11 +21,11 @@ def print_hi(name):
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    api = init(True);
-    klines = api.get_kline_serial("SHFE.ni2010",10)
+    api = init(True)
+    klines = api.get_kline_serial(Tao.MAIN_SHFE_RB,10)
     while True:
         api.wait_update()
-
+        print(klines) # 200条K线
         api.get_account()
     print_hi('PyCharm')
 
