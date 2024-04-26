@@ -99,23 +99,74 @@ CREATE TABLE `security_daily_frmbao` (
 
 
 
--- # 个股日线基础因子数据表
-drop table if exists `security_daily_factor_frmbao`;
-CREATE TABLE `security_daily_factor_frmbao` (
-  `date` date NOT NULL COMMENT '交易所行情日期',
-  `code` varchar(128) NOT NULL COMMENT '证券代码，包含交易所前缀 格式：sh.600000。sh：上海，sz：深圳',
-  `name` varchar(256) NOT NULL COMMENT '因子名称', 
-  `desc` varchar(256) NOT NULL COMMENT '因子描述',
-  `value` decimal(24,6) NOT NULL COMMENT '因子值',
-  `source` int DEFAULT NULL COMMENT '因子源',
-  `type` int DEFAULT NULL COMMENT '因子类型',
-  `industry` int DEFAULT NULL COMMENT '产业',
-  `status` int DEFAULT NULL COMMENT '状态',
-  `remark` text COMMENT '备注',
+
+
+-- 交易所表 (Exchanges)
+drop table if exists `Exchanges`;
+CREATE TABLE `Exchanges` (  
+  `exchange_id` INT AUTO_INCREMENT PRIMARY KEY,  
+  `exchange_name` VARCHAR(255) NOT NULL,  
+  `sname` VARCHAR(255) NOT NULL,  
+  `country` VARCHAR(255) NOT NULL,  
+  `timezone` VARCHAR(50) NOT NULL,  
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `create_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci; 
+INSERT INTO `Exchanges`(`exchange_name`,`sname`,`country`,`timezone`) values('上海证券交易所','sh','china','Asia/Shanghai');
+INSERT INTO `Exchanges`(`exchange_name`,`sname`,`country`,`timezone`) values('深圳证券交易所','sh','china','Asia/Shanghai');
+
+-- 交易日历表 (TradingDays)
+drop table if exists `TradingDays`;
+CREATE TABLE `TradingDays` (  
+  `exchange_id` INT,  
+  `date` DATE NOT NULL,  
+  `is_trading_day` BOOLEAN NOT NULL,  
+  `remarks` TEXT, 
   `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `create_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`date`,`code`),
-  INDEX `IDX_CODE` (`code`),
+  PRIMARY KEY (`exchange_id`,`date`)
+)ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci; 
+
+
+-- # 个股日线基础因子数据表
+drop table if exists `security_daily_factor`;
+CREATE TABLE `security_daily_factor` (
+  `date` date NOT NULL COMMENT '交易所行情日期',
+  `code` varchar(128) NOT NULL COMMENT '证券代码，包含交易所前缀 格式：sh.600000。sh：上海，sz：深圳',
+  `factor_name` varchar(256) NOT NULL COMMENT '因子名称', 
+  `factor_id` varchar(256) NOT NULL COMMENT '因子id',
+  `factor_value` double DEFAULT NULL COMMENT '因子值',
+  `source` int DEFAULT NULL COMMENT '因子值基于什么行情源计算',
+  `pool_size` int NOT NULL COMMENT '计算该因子时股票池子大小',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `create_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  -- PRIMARY KEY (`date`,`code`,`factor_id`,`factor_name`,`pool_size`),
   INDEX `IDX_DATE` (`date`),
-  INDEX `IDX_ISST` (`isST`)
-) ENGINE=InnoDB AUTO_INCREMENT=1050037 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  INDEX `IDX_FACTOR_NAME` (`factor_name`),
+  INDEX `IDX_FACTOR_ID` (`factor_id`),
+  INDEX `IDX_CODE` (`code`)
+
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+PARTITION BY RANGE ( YEAR(date) * 12 + MONTH(date) ) (  
+    PARTITION p202212 VALUES LESS THAN (2022 * 12 + 13),  
+    PARTITION p202301 VALUES LESS THAN (2023 * 12 + 2),  
+    PARTITION p202302 VALUES LESS THAN (2023 * 12 + 3),  
+    PARTITION p202303 VALUES LESS THAN (2023 * 12 + 4),  
+    PARTITION p202304 VALUES LESS THAN (2023 * 12 + 5),  
+    PARTITION p202305 VALUES LESS THAN (2023 * 12 + 6),  
+    PARTITION p202306 VALUES LESS THAN (2023 * 12 + 7),  
+    PARTITION p202307 VALUES LESS THAN (2023 * 12 + 8),  
+    PARTITION p202308 VALUES LESS THAN (2023 * 12 + 9),  
+    PARTITION p202309 VALUES LESS THAN (2023 * 12 + 10),  
+    PARTITION p202310 VALUES LESS THAN (2023 * 12 + 11),  
+    PARTITION p202311 VALUES LESS THAN (2023 * 12 + 12),  
+    PARTITION p202312 VALUES LESS THAN (2023 * 12 + 13),  
+    PARTITION p202401 VALUES LESS THAN (2024 * 12 + 2),  
+    PARTITION p202402 VALUES LESS THAN (2024 * 12 + 3),  
+    PARTITION p202403 VALUES LESS THAN (2024 * 12 + 4),  
+    PARTITION p202404 VALUES LESS THAN (2024 * 12 + 5),  
+    -- 添加一个MAXVALUE分区，以捕获未来所有的数据  
+    PARTITION pmax VALUES LESS THAN MAXVALUE  
+);
+
+====================================20240418 已上线

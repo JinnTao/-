@@ -18,7 +18,7 @@ handlers:
             class: logging.handlers.TimedRotatingFileHandler
             level: INFO
             formatter: simple
-            filename: python-strategy/userdata/log/info.log
+            filename: D:/quant/promise/python-strategy/userdata/log/info.log
             backupCount: 30
             interval: 1
             when: midnight
@@ -27,7 +27,7 @@ handlers:
             class: logging.handlers.TimedRotatingFileHandler
             level: DEBUG
             formatter: simple
-            filename: python-strategy/userdata/log/debug.log
+            filename: D:/quant/promise/python-strategy/userdata/log/debug.log
             backupCount: 30
             interval: 1
             when: midnight
@@ -36,7 +36,7 @@ handlers:
             class: logging.handlers.TimedRotatingFileHandler
             level: ERROR
             formatter: simple
-            filename: python-strategy/userdata/log/error.log
+            filename:  D:/quant/promise/python-strategy/userdata/log/error.log
             backupCount: 30
             interval: 1
             when: midnight
